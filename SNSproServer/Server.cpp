@@ -1,10 +1,20 @@
-﻿#include "..\..\Common.h"
+﻿#define _WINSOCK_DEPRECATED_NO_WARNINGS
+#define _CRT_SECURE_NO_WARNINGS
 
-#define SERVERPORT 9000
-#define BUFSIZE    512
+#include <stdio.h>
+#include <WinSock2.h>
+#include <process.h>
+#include <string.h>
 
+int server_init();
+int server_close();
+unsigned int WINAPI do_chat_service(void* param);
+unsigned int WINAPI recv_and_forward(void* param);
 int add_client(int index);
+int read_client(int index);
 void remove_client(int index);
+int notify_client(char * message);
+char* get_client_ip(int index);
 
 typedef struct sock_info
 {
@@ -14,53 +24,148 @@ typedef struct sock_info
 	char ipaddr[50];
 }SOCK_INFO;
 
-const int client_max = 10;
-SOCK_INFO sock_array[client_max + 1];
-int socket_count = 0;
+int port_number = 9999;
+const int client_count = 10;
+SOCK_INFO sock_array[client_count + 1];
+int total_socket_count = 0;
 
-
-// 클라이언트와 데이터 통신
-DWORD WINAPI ProcessClient(LPVOID arg)
+int main(int argc, char* argv[])
 {
-	int retval;
-	SOCKET client_sock = (SOCKET)arg;
-	struct sockaddr_in clientaddr;
-	char addr[INET_ADDRSTRLEN];
-	int addrlen;
-	char buf[BUFSIZE + 1];
+	unsigned int tid;
+	char message[MAXBYTE] = "";
+	HANDLE mainthread;
 
-	// 클라이언트 정보 얻기
-	addrlen = sizeof(clientaddr);
-	getpeername(client_sock, (struct sockaddr*)&clientaddr, &addrlen);
-	inet_ntop(AF_INET, &clientaddr.sin_addr, addr, sizeof(addr));
+	printf("\n사용법 : mcodes_server [포트번호]\n");
+	printf("         ex) mcodes_server.exe 9999\n");
+	printf("         ex) mcodes_server.exe \n\n");
 
-	while (1) {
-		// 데이터 받기
-		retval = recv(client_sock, buf, BUFSIZE, 0);
-		if (retval == SOCKET_ERROR) {
-			err_display("recv()");
-			break;
+	if (argv[1] != NULL)
+		port_number = atoi(argv[1]);
+
+	mainthread  = (HANDLE)_beginthreadex(NULL, 0, do_chat_service, (void*)0, 0, &tid);
+	if (mainthread)
+	{
+		while (1)
+		{
+			gets_s(message, MAXBYTE);
+			if (strcmp(message, "/x") == 0)
+				break;
+
+			notify_client(message);
 		}
-		else if (retval == 0)
-			break;
-
-		// 받은 데이터 출력
-		buf[retval] = '\0';
-		printf("[TCP/%s:%d] %s\n", addr, ntohs(clientaddr.sin_port), buf);
-
-		// 데이터 보내기
-		retval = send(client_sock, buf, retval, 0);
-		if (retval == SOCKET_ERROR) {
-			err_display("send()");
-			break;
-		}
+		server_close();
+		WSACleanup();
+		CloseHandle(mainthread);
 	}
 
-	// 소켓 닫기
-	closesocket(client_sock);
-	printf("[TCP 서버] 클라이언트 종료: IP 주소=%s, 포트 번호=%d\n",
-		addr, ntohs(clientaddr.sin_port));
 	return 0;
+}
+
+int server_init()
+{
+	WSADATA wsadata;
+	SOCKET s;
+	SOCKADDR_IN server_address;
+
+	memset(&sock_array, 0, sizeof(sock_array));
+	total_socket_count  = 0;
+	if (WSAStartup(MAKEWORD(2, 2), &wsadata) != 0)
+	{
+		puts("WSAStartup 에러.");
+		return  - 1;
+	}
+
+	if ((s  = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
+	{
+		puts("socket 에러.");
+		return  - 1;
+	}
+
+	memset(&server_address, 0, sizeof(server_address));
+	server_address.sin_family  = AF_INET;
+	server_address.sin_addr.s_addr  = htonl(INADDR_ANY);
+	server_address.sin_port  = htons(port_number);
+
+	if (bind(s, (struct sockaddr*)&server_address, sizeof(server_address)) < 0)
+	{
+		puts("bind 에러");
+		return  - 2;
+	}
+
+	if (listen(s, SOMAXCONN) < 0)
+	{
+		puts("listen 에러");
+		return  - 3;
+	}
+
+	return s;
+}
+
+int server_close()
+{
+	for (int i  = 1; i  < total_socket_count; i++)
+	{
+		closesocket(sock_array[i].s);
+		WSACloseEvent(sock_array[i].ev);
+	}
+
+	return 0;
+}
+
+unsigned int WINAPI do_chat_service(void* param)
+
+{
+	SOCKET server_socket;
+	WSANETWORKEVENTS ev;
+	int index;
+	WSAEVENT handle_array[client_count + 1];
+
+	server_socket = server_init();
+	if (server_socket < 0)
+	{
+		printf("초기화 에러\n");
+		exit(0);
+	}
+	else
+	{
+		printf("\n >> 서버 초기화가 완료되었습니다.(포트번호:%d)\n", port_number);
+
+		HANDLE event  = WSACreateEvent();
+		sock_array[total_socket_count].ev = event;
+		sock_array[total_socket_count].s  = server_socket;
+		strcpy_s(sock_array[total_socket_count].nick, "svr");
+		strcpy_s(sock_array[total_socket_count].ipaddr, "0.0.0.0");
+
+		WSAEventSelect(server_socket, event, FD_ACCEPT);
+		total_socket_count++;
+
+		while (true)
+		{
+			memset(&handle_array, 0, sizeof(handle_array));
+			for(int i = 0; i < total_socket_count; i++)
+				handle_array[i] = sock_array[i].ev;
+
+			index = WSAWaitForMultipleEvents(total_socket_count,
+				handle_array, false, INFINITE, false);
+			if((index != WSA_WAIT_FAILED) && (index != WSA_WAIT_TIMEOUT))
+			{
+				WSAEnumNetworkEvents(sock_array[index].s, sock_array[index].ev, &ev);
+				if(ev.lNetworkEvents == FD_ACCEPT)
+					add_client(index);
+				else if(ev.lNetworkEvents == FD_READ)
+					read_client(index);
+				else if(ev.lNetworkEvents == FD_CLOSE)
+					remove_client(index);
+			}
+		}
+		closesocket(server_socket);
+		}
+
+		WSACleanup();
+		_endthreadex(0);
+
+		return 0;
+
 }
 
 int add_client(int index)
@@ -69,84 +174,113 @@ int add_client(int index)
 	int len = 0;
 	SOCKET accept_sock;
 
-	len = sizeof(addr);
-	memset(&addr, 0, sizeof(addr));
-	accept_sock = accept(sock_array[0].s, (SOCKADDR*)&addr, &len);
+	if (total_socket_count == FD_SETSIZE)
+		return 1;
+	else{
 
-	HANDLE event = WSACreateEvent();
-	sock_array[socket_count].ev = event;
-	sock_array[socket_count].s = accept_sock;
-	strcpy_s(sock_array[socket_count].ipaddr, inet_ntoa(addr.sin_addr));
+		len = sizeof(addr);
+		memset(&addr,0,sizeof(addr));
+		accept_sock = accept(sock_array[0].s,(SOCKADDR*)&addr,&len);
 
-	WSAEventSelect(accept_sock, event, FD_READ | FD_CLOSE);
+		HANDLE event = WSACreateEvent();
+		sock_array[total_socket_count].ev = event;
+		sock_array[total_socket_count].s = accept_sock;
+		strcpy_s(sock_array[total_socket_count].ipaddr,inet_ntoa(addr.sin_addr));
 
-	socket_count++;
-	printf(" >> 신규 클라이언트 접속(IP : %s)\n", inet_ntoa(addr.sin_addr));
+		WSAEventSelect(accept_sock,event,FD_READ | FD_CLOSE);
 
-	char msg[256];
-	sprintf_s(msg, " >> 신규 클라이언트 접속(IP : %s)\n", inet_ntoa(addr.sin_addr));
+		total_socket_count++;
+		printf(" >> 신규 클라이언트 접속(IP : %s)\n",inet_ntoa(addr.sin_addr));
+
+		char msg[256];
+		sprintf_s(msg, " >> 신규 클라이언트 접속(IP : %s)\n", inet_ntoa(addr.sin_addr));
+		notify_client(msg);
+	}
 
 	return 0;
 }
 
-int main(int argc, char* argv[])
+int read_client(int index)
 {
-	int retval;
+	unsigned int tid;
+	HANDLE mainthread = (HANDLE)_beginthreadex(NULL, 0, recv_and_forward, (void*)index, 0, &tid);
+	WaitForSingleObject(mainthread, INFINITE);
 
-	// 윈속 초기화
-	WSADATA wsa;
-	if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
-		return 1;
+	CloseHandle(mainthread);
 
-	// 소켓 생성
-	SOCKET listen_sock = socket(AF_INET, SOCK_STREAM, 0);
-	if (listen_sock == INVALID_SOCKET) err_quit("socket()");
+	return 0;
+}
 
-	// bind()
-	struct sockaddr_in serveraddr;
-	memset(&serveraddr, 0, sizeof(serveraddr));
-	serveraddr.sin_family = AF_INET;
-	serveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
-	serveraddr.sin_port = htons(SERVERPORT);
-	retval = bind(listen_sock, (struct sockaddr*)&serveraddr, sizeof(serveraddr));
-	if (retval == SOCKET_ERROR) err_quit("bind()");
+unsigned int WINAPI recv_and_forward(void* param)
+{
+	int index = (int)param;
+	char message[MAXBYTE], share_message[MAXBYTE];
+	SOCKADDR_IN client_address;
+	int recv_len = 0, addr_len = 0;
+	char* token1 = NULL;
+	char* next_token = NULL;
 
-	// listen()
-	retval = listen(listen_sock, SOMAXCONN);
-	if (retval == SOCKET_ERROR) err_quit("listen()");
+	memset(&client_address, 0, sizeof(client_address));
 
-	// 데이터 통신에 사용할 변수
-	SOCKET client_sock;
-	struct sockaddr_in clientaddr;
-	int addrlen;
-	HANDLE hThread;
+	if((recv_len = recv(sock_array[index].s, message, MAXBYTE, 0)) > 0)
+	{
+		addr_len = sizeof(client_address);
+		getpeername(sock_array[index].s, (SOCKADDR*)&client_address, &addr_len);
+		strcpy_s(share_message, message);
 
-	while (1) {
-		// accept()
-		addrlen = sizeof(clientaddr);
-		client_sock = accept(listen_sock, (struct sockaddr*)&clientaddr, &addrlen);
-		if (client_sock == INVALID_SOCKET) {
-			err_display("accept()");
-			break;
+		if(strlen(sock_array[index].nick) <= 0)
+		{
+			token1 = strtok_s(message, "]", &next_token);
+			strcpy_s(sock_array[index].nick, token1 + 1);
 		}
-
-		// 접속한 클라이언트 정보 출력
-		char addr[INET_ADDRSTRLEN];
-		inet_ntop(AF_INET, &clientaddr.sin_addr, addr, sizeof(addr));
-		printf("\n[TCP 서버] 클라이언트 접속: IP 주소=%s, 포트 번호=%d\n",
-			addr, ntohs(clientaddr.sin_port));
-
-		// 스레드 생성
-		hThread = CreateThread(NULL, 0, ProcessClient,
-			(LPVOID)client_sock, 0, NULL);
-		if (hThread == NULL) { closesocket(client_sock); }
-		else { CloseHandle(hThread); }
+		for(int i = 1; i < total_socket_count;i++)
+			send(sock_array[i].s, share_message, MAXBYTE, 0);
 	}
 
-	// 소켓 닫기
-	closesocket(listen_sock);
+	_endthreadex(0);
+	return 0;
+}
 
-	// 윈속 종료
-	WSACleanup();
+void remove_client(int index)
+{
+	char remove_ip[256];
+	char message[MAXBYTE];
+
+	strcpy_s(remove_ip, get_client_ip(index));
+	printf(" >> 클라이언트 접속 종료(Index: %d, IP: %s, 별명: %s)\n", index, remove_ip, sock_array[index].nick);
+	sprintf_s(message, " >> 클라이언트 접속 종료(IP: %s, 별명: %s)\n", remove_ip, sock_array[index].nick);
+
+	closesocket(sock_array[index].s);
+	WSACloseEvent(sock_array[index].ev);
+
+	total_socket_count--;
+	sock_array[index].s = sock_array[total_socket_count].s;
+	sock_array[index].ev = sock_array[total_socket_count].ev;
+	strcpy_s(sock_array[index].ipaddr, sock_array[total_socket_count].ipaddr);
+	strcpy_s(sock_array[index].nick, sock_array[total_socket_count].nick);
+
+	notify_client(message);
+}
+
+char* get_client_ip(int index)
+{
+	static char ipaddress[256];
+	int addr_len;
+	struct sockaddr_in sock;
+
+	addr_len = sizeof(sock);
+	if(getpeername(sock_array[index].s, (struct sockaddr*)&sock, &addr_len) < 0)
+		return NULL;
+
+	strcpy_s(ipaddress, inet_ntoa(sock.sin_addr));
+	return ipaddress;
+}
+
+
+int notify_client(char* message)
+{
+	for (int i = 1; i < total_socket_count; i++)
+		send(sock_array[i].s, message, MAXBYTE, 0);
+
 	return 0;
 }
