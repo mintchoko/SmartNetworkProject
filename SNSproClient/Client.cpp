@@ -12,7 +12,7 @@ int main(int argc, char* argv[])
 
 {
 	char ip_addr[256] = "";
-	int port_number = 9999;
+	int port_number = 9000;
 	char nickname[50] = "";
 	unsigned int tid;
 	int sock;
@@ -23,8 +23,8 @@ int main(int argc, char* argv[])
 
 	if (argc  < 3)
 	{
-		printf("\n사용법 : mcodes_client [서버주소] [포트번호] [닉네임]\n\n");
-		printf("        ex) mcodes_client.exe 192.168.100.100 9999 mainCodes\n");
+		printf("\n사용법 : mcodes_client [서버주소] [포트번호] [닉네임]\n\n");
+		printf("        ex) mcodes_client.exe 192.168.100.100 9999 mainCodes\n");
 		exit(0);
 	}
 
@@ -38,7 +38,7 @@ int main(int argc, char* argv[])
 	sock = client_init(ip_addr, port_number);
 	if(sock < 0)
 	{
-		printf("sock_init 에러\n");
+		printf("sock_init 에러\n");
 		exit(0);
 	}
 
@@ -79,7 +79,7 @@ int client_init(char* ip, int port)
 
 	if ((server_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
 	{
-		puts("socket 에러.");
+		puts("socket 에러.");
 		return - 1;
 	}
 
@@ -90,7 +90,7 @@ int client_init(char* ip, int port)
 
 	if ((connect(server_socket, (struct sockaddr*)&server_address, sizeof(server_address))) < 0)
 	{
-		puts("connect 에러.");
+		puts("connect 에러.");
 		return - 1;
 	}
 
@@ -121,7 +121,7 @@ unsigned int WINAPI do_chat_service(void* params)
 			}
 			else if(ev.lNetworkEvents == FD_CLOSE)
 			{
-				printf(" >> 서버 서비스가 중단되었습니다.(종료: \"/x\")\n");
+				printf(" >> 서버 서비스가 중단되었습니다.(종료: \"/x\")\n");
 				closesocket(s);
 				break;
 			}

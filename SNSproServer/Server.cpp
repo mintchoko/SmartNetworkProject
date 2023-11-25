@@ -24,7 +24,7 @@ typedef struct sock_info
 	char ipaddr[50];
 }SOCK_INFO;
 
-int port_number = 9999;
+int port_number = 9000;
 const int client_count = 10;
 SOCK_INFO sock_array[client_count + 1];
 int total_socket_count = 0;
@@ -35,9 +35,9 @@ int main(int argc, char* argv[])
 	char message[MAXBYTE] = "";
 	HANDLE mainthread;
 
-	printf("\n사용법 : mcodes_server [포트번호]\n");
-	printf("         ex) mcodes_server.exe 9999\n");
-	printf("         ex) mcodes_server.exe \n\n");
+	printf("\n사용법 : mcodes_server [포트번호]\n");
+	printf("         ex) mcodes_server.exe 9000\n");
+	printf("         ex) mcodes_server.exe \n\n");
 
 	if (argv[1] != NULL)
 		port_number = atoi(argv[1]);
@@ -71,13 +71,13 @@ int server_init()
 	total_socket_count  = 0;
 	if (WSAStartup(MAKEWORD(2, 2), &wsadata) != 0)
 	{
-		puts("WSAStartup 에러.");
+		puts("WSAStartup 에러.");
 		return  - 1;
 	}
 
 	if ((s  = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
 	{
-		puts("socket 에러.");
+		puts("socket 에러.");
 		return  - 1;
 	}
 
@@ -88,13 +88,13 @@ int server_init()
 
 	if (bind(s, (struct sockaddr*)&server_address, sizeof(server_address)) < 0)
 	{
-		puts("bind 에러");
+		puts("bind 에러");
 		return  - 2;
 	}
 
 	if (listen(s, SOMAXCONN) < 0)
 	{
-		puts("listen 에러");
+		puts("listen 에러");
 		return  - 3;
 	}
 
@@ -123,12 +123,12 @@ unsigned int WINAPI do_chat_service(void* param)
 	server_socket = server_init();
 	if (server_socket < 0)
 	{
-		printf("초기화 에러\n");
+		printf("초기화 에러\n");
 		exit(0);
 	}
 	else
 	{
-		printf("\n >> 서버 초기화가 완료되었습니다.(포트번호:%d)\n", port_number);
+		printf("\n >> 서버 초기화가 완료되었습니다.(포트번호:%d)\n", port_number);
 
 		HANDLE event  = WSACreateEvent();
 		sock_array[total_socket_count].ev = event;
@@ -190,10 +190,10 @@ int add_client(int index)
 		WSAEventSelect(accept_sock,event,FD_READ | FD_CLOSE);
 
 		total_socket_count++;
-		printf(" >> 신규 클라이언트 접속(IP : %s)\n",inet_ntoa(addr.sin_addr));
+		printf(" >> 신규 클라이언트 접속(IP : %s)\n",inet_ntoa(addr.sin_addr));
 
 		char msg[256];
-		sprintf_s(msg, " >> 신규 클라이언트 접속(IP : %s)\n", inet_ntoa(addr.sin_addr));
+		sprintf_s(msg, " >> 신규 클라이언트 접속(IP : %s)\n", inet_ntoa(addr.sin_addr));
 		notify_client(msg);
 	}
 
@@ -247,8 +247,8 @@ void remove_client(int index)
 	char message[MAXBYTE];
 
 	strcpy_s(remove_ip, get_client_ip(index));
-	printf(" >> 클라이언트 접속 종료(Index: %d, IP: %s, 별명: %s)\n", index, remove_ip, sock_array[index].nick);
-	sprintf_s(message, " >> 클라이언트 접속 종료(IP: %s, 별명: %s)\n", remove_ip, sock_array[index].nick);
+	printf(" >> 클라이언트 접속 종료(Index: %d, IP: %s, 별명: %s)\n", index, remove_ip, sock_array[index].nick);
+	sprintf_s(message, " >> 클라이언트 접속 종료(IP: %s, 별명: %s)\n", remove_ip, sock_array[index].nick);
 
 	closesocket(sock_array[index].s);
 	WSACloseEvent(sock_array[index].ev);
