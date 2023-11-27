@@ -24,7 +24,7 @@ int main(int argc, char* argv[])
 	if (argc  < 3)
 	{
 		printf("\n사용법 : mcodes_client [서버주소] [포트번호] [닉네임]\n\n");
-		printf("        ex) mcodes_client.exe 192.168.100.100 9999 mainCodes\n");
+		printf("        ex) mcodes_client.exe 192.168.100.100 9000 mainCodes\n");
 		exit(0);
 	}
 
@@ -48,7 +48,7 @@ int main(int argc, char* argv[])
 		while (1)
 		{
 			gets_s(input, MAXBYTE);
-			sprintf_s(message, "[%s] %s", nickname, input);
+			sprintf_s(message, "[%s] %s", nickname, input);
 			send(sock, message, sizeof(message), 0);
 			pexit = strrchr(message, '/');
 			if(pexit)
@@ -115,7 +115,8 @@ unsigned int WINAPI do_chat_service(void* params)
 			WSAEnumNetworkEvents(s, event, &ev);
 			if (ev.lNetworkEvents == FD_READ)
 			{
-				int len  = recv(s, recv_message, MAXBYTE, 0);
+				memset(recv_message, 0, sizeof(recv_message)); // 배열 초기화
+				len  = recv(s, recv_message, MAXBYTE, 0);
 				if (len > 0)
 					printf("%s\n", recv_message);
 			}

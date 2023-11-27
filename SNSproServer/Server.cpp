@@ -195,6 +195,10 @@ int add_client(int index)
 		char msg[256];
 		sprintf_s(msg, " >> 신규 클라이언트 접속(IP : %s)\n", inet_ntoa(addr.sin_addr));
 		notify_client(msg);
+
+		unsigned int tid;
+		HANDLE thread = (HANDLE)_beginthreadex(NULL, 0, recv_and_forward, (void*)index, 0, &tid);
+		CloseHandle(thread);
 	}
 
 	return 0;
@@ -222,7 +226,7 @@ unsigned int WINAPI recv_and_forward(void* param)
 
 	memset(&client_address, 0, sizeof(client_address));
 
-	if((recv_len = recv(sock_array[index].s, message, MAXBYTE, 0)) > 0)
+	while((recv_len = recv(sock_array[index].s, message, MAXBYTE, 0)) > 0)
 	{
 		addr_len = sizeof(client_address);
 		getpeername(sock_array[index].s, (SOCKADDR*)&client_address, &addr_len);
@@ -236,6 +240,7 @@ unsigned int WINAPI recv_and_forward(void* param)
 		for(int i = 1; i < total_socket_count;i++)
 			send(sock_array[i].s, share_message, MAXBYTE, 0);
 	}
+	remove_client(index);
 
 	_endthreadex(0);
 	return 0;
