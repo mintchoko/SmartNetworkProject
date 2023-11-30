@@ -25,10 +25,10 @@ int port_number = SERVER_PORT;
 const int client_count = 10;
 SOCK_INFO sock_array[client_count + 1];
 int total_socket_count = 0;
+SOCKET serverSocket;
 
 HWND hChatHistoryEdit, hIpAddressStatic, hMessageEdit, hNickNameEdit;  // 추가: 서버 IP 주소를 표시할 정적 텍스트 컨트롤 핸들
-SOCKET serverSocket, clientSocket;
-WSADATA wsaData;
+
 
 void AddMessageToChatHistory(const char* message) {
     SendMessage(hChatHistoryEdit, EM_SETSEL, -1, -1);
@@ -37,6 +37,9 @@ void AddMessageToChatHistory(const char* message) {
 }
 
 DWORD WINAPI ClientHandler(LPVOID lpParam);
+DWORD WINAPI ClientAcceptThread(LPVOID lpParam);
+LRESULT CALLBACK DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
+DWORD WINAPI ClientHandler(LPVOID lpParam);
 
 LRESULT CALLBACK DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch (uMsg) {
@@ -44,7 +47,10 @@ LRESULT CALLBACK DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPara
         hChatHistoryEdit = GetDlgItem(hwndDlg, IDC_CHAT_HISTORY_EDIT);
         hIpAddressStatic = GetDlgItem(hwndDlg, IDC_IPADDRESS_STATIC);
 
+        memset(&sock_array, 0, sizeof(sock_array));
+        total_socket_count = 0;
         // 윈속 초기화
+        WSADATA wsaData;
         if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
             MessageBox(hwndDlg, L"Failed to initialize Winsock.", L"Error", MB_OK | MB_ICONERROR);
             EndDialog(hwndDlg, 0);
@@ -58,6 +64,7 @@ LRESULT CALLBACK DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPara
         }
 
         SOCKADDR_IN serverAddr;
+        memset(&serverAddr, 0, sizeof(serverAddr));
         serverAddr.sin_family = AF_INET;
         serverAddr.sin_port = htons(SERVER_PORT);
         serverAddr.sin_addr.s_addr = INADDR_ANY;
@@ -84,20 +91,21 @@ LRESULT CALLBACK DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPara
 
         MessageBox(hwndDlg, L"Server is listening for incoming connections.", L"Info", MB_OK | MB_ICONINFORMATION);
 
+        // 클라이언트를 처리하기 위한 스레드 생성
+        DWORD threadId;
+        HANDLE hThread;
+        hThread = CreateThread(NULL, 0, ClientAcceptThread, (LPVOID)serverSocket, 0, &threadId);
+        if (hThread == NULL) {
+            MessageBox(hwndDlg, L"Failed to create client accept thread.", L"Error", MB_OK | MB_ICONERROR);
+            closesocket(serverSocket);
+            WSACleanup();
+            EndDialog(hwndDlg, 0);
+        }
+        else {
+            CloseHandle(hThread);
+        }
+
         return TRUE;
-
-    case IDC_SETNICK_BUTTON:
-        // 닉네임 설정 버튼 동작 추가
-    {
-        wchar_t nickName[256];
-        GetWindowText(hNickNameEdit, nickName, sizeof(nickName) / sizeof(nickName[0]));
-
-        char buffer[MAX_BUFFER_SIZE];
-        sprintf_s(buffer, sizeof(buffer), "[%ls] joined the chat.\r\n", nickName);
-
-        send(clientSocket, buffer, strlen(buffer), 0);
-    }
-    break;
 
     case IDC_SEND_BUTTON:
         // 메시지 전송 버튼 동작 추가
@@ -105,13 +113,10 @@ LRESULT CALLBACK DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPara
         wchar_t message[256];
         GetWindowText(hMessageEdit, message, sizeof(message) / sizeof(message[0]));
 
-        wchar_t nickName[256];
-        GetWindowText(hNickNameEdit, nickName, sizeof(nickName) / sizeof(nickName[0]));
-
         char buffer[MAX_BUFFER_SIZE];
-        sprintf_s(buffer, sizeof(buffer), "[%ls] %ls\r\n", nickName, message);
+        sprintf_s(buffer, sizeof(buffer), "%ls\r\n", message);
 
-        send(clientSocket, buffer, strlen(buffer), 0);
+        //send((SOCKET)lpParam, buffer, strlen(buffer), 0);
     }
     break;
 
@@ -119,7 +124,7 @@ LRESULT CALLBACK DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPara
         switch (LOWORD(wParam)) {
         case IDC_EXIT_BUTTON:
             // 서버 종료 버튼 동작 추가
-            closesocket(clientSocket);
+            //closesocket(clientSocket);
             closesocket(serverSocket);
             WSACleanup();
             EndDialog(hwndDlg, 0);
@@ -129,7 +134,7 @@ LRESULT CALLBACK DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPara
 
     case WM_CLOSE:
         // 서버 종료 처리 추가
-        closesocket(clientSocket);
+        //closesocket(clientSocket);
         closesocket(serverSocket);
         WSACleanup();
         EndDialog(hwndDlg, 0);
@@ -141,6 +146,35 @@ LRESULT CALLBACK DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPara
         return FALSE;
     }
     return TRUE;
+}
+
+// 클라이언트 연결을 받는 쓰레드 함수
+DWORD WINAPI ClientAcceptThread(LPVOID lpParam) {
+    SOCKET serverSocket = (SOCKET)lpParam;
+
+    while (true) {
+        SOCKET clientSocket = accept(serverSocket, NULL, NULL);
+        if (clientSocket == INVALID_SOCKET) {
+            MessageBox(NULL, L"Failed to accept client socket.", L"Error", MB_OK | MB_ICONERROR);
+            break;
+        }
+
+        // 클라이언트를 처리하기 위한 스레드 생성
+        DWORD threadId;
+        HANDLE hThread = CreateThread(NULL, 0, ClientHandler, (LPVOID)clientSocket, 0, &threadId);
+        if (hThread == NULL) {
+            MessageBox(NULL, L"Failed to create client thread.", L"Error", MB_OK | MB_ICONERROR);
+            closesocket(clientSocket);
+            break;
+        }
+        else {
+            // 스레드를 종료하기 위해 핸들을 저장해 둡니다.
+            // 필요에 따라 스레드 핸들을 관리하는 메커니즘을 구현할 수 있습니다.
+            CloseHandle(hThread);
+        }
+    }
+
+    return 0;
 }
 
 DWORD WINAPI ClientHandler(LPVOID lpParam) {
