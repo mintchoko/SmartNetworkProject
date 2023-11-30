@@ -1,0 +1,14 @@
+{
+  "ExpandedNodes": [
+    "",
+    "\\client_test4",
+    "\\GUITCPServer",
+    "\\server_test4",
+    "\\SNSproClient",
+    "\\SNSproClient\\x64",
+    "\\SNSproClient\\x64\\Debug",
+    "\\SNSproServer"
+  ],
+  "SelectedNode": "\\server_test4\\server_test4.cpp",
+  "PreviewInSolutionExplorer": false
+}

@@ -1,10 +1,30 @@
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
+#define _CRT_SECURE_NO_WARNINGS
+
+
 #include <winsock2.h>
 #include <windows.h>
 #include <cstdio>    // 추가: sprintf_s를 사용하기 위한 헤더 파일
 #include "resource.h"
+#include <stdio.h>
+#include <process.h>
+#include <string.h>
 
 #define MAX_BUFFER_SIZE 1024
-#define SERVER_PORT 12345
+#define SERVER_PORT 9000
+
+typedef struct sock_info
+{
+    SOCKET s;
+    HANDLE ev;
+    char nick[50];
+    char ipaddr[50];
+}SOCK_INFO;
+
+int port_number = SERVER_PORT;
+const int client_count = 10;
+SOCK_INFO sock_array[client_count + 1];
+int total_socket_count = 0;
 
 HWND hChatHistoryEdit, hIpAddressStatic, hMessageEdit, hNickNameEdit;  // 추가: 서버 IP 주소를 표시할 정적 텍스트 컨트롤 핸들
 SOCKET serverSocket, clientSocket;
