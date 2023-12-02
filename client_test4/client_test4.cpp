@@ -76,7 +76,6 @@ LRESULT CALLBACK DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPara
         {
             wchar_t nickName[256];
             GetWindowText(hNickNameEdit, nickName, sizeof(nickName) / sizeof(nickName[0]));
-			nickname = 
             char buffer[MAX_BUFFER_SIZE];
             sprintf_s(buffer, sizeof(buffer), "[%ls] joined the chat.\r\n", nickName);
 

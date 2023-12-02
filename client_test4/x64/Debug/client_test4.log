@@ -1,7 +1,7 @@
 ﻿  client_test4.cpp
-D:\SmartNetworkProject\client_test4\client_test4.cpp(83,57): warning C4267: '인수': 'size_t'에서 'int'(으)로 변환하면서 데이터가 손실될 수 있습니다.
-D:\SmartNetworkProject\client_test4\client_test4.cpp(156,9): warning C4244: 'return': 'SOCKET'에서 'int'(으)로 변환하면서 데이터가 손실될 수 있습니다.
-D:\SmartNetworkProject\client_test4\client_test4.cpp(161,7): warning C4101: 'recv_message' :참조되지 않은 지역 변수입니다.
-D:\SmartNetworkProject\client_test4\client_test4.cpp(164,19): warning C4101: 'ev' :참조되지 않은 지역 변수입니다.
-D:\SmartNetworkProject\client_test4\client_test4.cpp(210,9): warning C4101: 'mainthread' :참조되지 않은 지역 변수입니다.
+D:\SmartNetworkProject\client_test4\client_test4.cpp(82,57): warning C4267: '인수': 'size_t'에서 'int'(으)로 변환하면서 데이터가 손실될 수 있습니다.
+D:\SmartNetworkProject\client_test4\client_test4.cpp(155,9): warning C4244: 'return': 'SOCKET'에서 'int'(으)로 변환하면서 데이터가 손실될 수 있습니다.
+D:\SmartNetworkProject\client_test4\client_test4.cpp(160,7): warning C4101: 'recv_message' :참조되지 않은 지역 변수입니다.
+D:\SmartNetworkProject\client_test4\client_test4.cpp(163,19): warning C4101: 'ev' :참조되지 않은 지역 변수입니다.
+D:\SmartNetworkProject\client_test4\client_test4.cpp(209,9): warning C4101: 'mainthread' :참조되지 않은 지역 변수입니다.
   client_test4.vcxproj -> D:\SmartNetworkProject\client_test4\x64\Debug\client_test4.exe

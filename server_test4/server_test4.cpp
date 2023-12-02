@@ -72,13 +72,11 @@ LRESULT CALLBACK DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPara
         case IDC_SEND_BUTTON:
             // 메시지 전송 버튼 동작 추가
         {
-            wchar_t message[256];
-            GetWindowText(hMessageEdit, message, sizeof(message) / sizeof(message[0]));
-            char buffer[MAX_BUFFER_SIZE];
-            sprintf_s(buffer, sizeof(buffer), "%ls\r\n", message);
-            DisplayText(buffer);
-            notify_client(buffer);
-            SetWindowText(hMessageEdit, L"");
+            char message[MAX_BUFFER_SIZE];
+            GetWindowTextA(hMessageEdit, message, sizeof(message));
+            DisplayText("%s\r\n", message);
+            notify_client(message);
+            SetWindowTextA(hMessageEdit, "");
             return TRUE;
         }
         case IDC_EXIT_BUTTON:
