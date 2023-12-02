@@ -146,7 +146,6 @@
     <ResourceCompile Include="client_test4.rc" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\Common.h" />
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

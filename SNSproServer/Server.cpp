@@ -35,10 +35,6 @@ int main(int argc, char* argv[])
 	char message[MAXBYTE] = "";
 	HANDLE mainthread;
 
-	printf("\n사용법 : mcodes_server [포트번호]\n");
-	printf("         ex) mcodes_server.exe 9000\n");
-	printf("         ex) mcodes_server.exe \n\n");
-
 	if (argv[1] != NULL)
 		port_number = atoi(argv[1]);
 
@@ -72,13 +68,13 @@ int server_init()
 	if (WSAStartup(MAKEWORD(2, 2), &wsadata) != 0)
 	{
 		puts("WSAStartup 에러.");
-		return  - 1;
+		return - 1;
 	}
 
 	if ((s  = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
 	{
 		puts("socket 에러.");
-		return  - 1;
+		return - 1;
 	}
 
 	memset(&server_address, 0, sizeof(server_address));
@@ -89,13 +85,13 @@ int server_init()
 	if (bind(s, (struct sockaddr*)&server_address, sizeof(server_address)) < 0)
 	{
 		puts("bind 에러");
-		return  - 2;
+		return - 2;
 	}
 
 	if (listen(s, SOMAXCONN) < 0)
 	{
 		puts("listen 에러");
-		return  - 3;
+		return - 3;
 	}
 
 	return s;
@@ -195,10 +191,6 @@ int add_client(int index)
 		char msg[256];
 		sprintf_s(msg, " >> 신규 클라이언트 접속(IP : %s)\n", inet_ntoa(addr.sin_addr));
 		notify_client(msg);
-
-		unsigned int tid;
-		HANDLE thread = (HANDLE)_beginthreadex(NULL, 0, recv_and_forward, (void*)index, 0, &tid);
-		CloseHandle(thread);
 	}
 
 	return 0;
@@ -240,7 +232,6 @@ unsigned int WINAPI recv_and_forward(void* param)
 		for(int i = 1; i < total_socket_count;i++)
 			send(sock_array[i].s, share_message, MAXBYTE, 0);
 	}
-	remove_client(index);
 
 	_endthreadex(0);
 	return 0;

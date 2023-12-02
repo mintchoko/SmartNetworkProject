@@ -1,185 +1,44 @@
-#include "Common.h"
+ï»¿#define _WINSOCK_DEPRECATED_NO_WARNINGS
+#define _CRT_SECURE_NO_WARNINGS
+#include <stdio.h>
+#include <process.h>
+#include <string.h>
+#include <winsock2.h>
+#include <windows.h>
+#include <cstdio>    // ì¶”ê°€: sprintf_së¥¼ ì‚¬ìš©í•˜ê¸° ìœ„í•œ í—¤ë” íŒŒì¼
+#include <ws2tcpip.h> // ì¶”ê°€: InetPtonì„ ì‚¬ìš©í•˜ê¸° ìœ„í•œ í—¤ë” íŒŒì¼
 #include "resource.h"
 
-#define SERVERIP   "127.0.0.1"
-#define SERVERPORT 9000
-#define BUFSIZE    512
+#define MAX_BUFFER_SIZE 512
+#define SERVER_PORT 9000
+#define SERVER_IP "127.0.0.1"
 
-// ´ëÈ­»óÀÚ ÇÁ·Î½ÃÀú
-INT_PTR CALLBACK DlgProc(HWND, UINT, WPARAM, LPARAM);
-// ¿¡µğÆ® ÄÁÆ®·Ñ Ãâ·Â ÇÔ¼ö
+int client_init(char* ip, int port);
+DWORD WINAPI chat_service(void* param);
+LRESULT CALLBACK DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
 void DisplayText(const char* fmt, ...);
-// ¼ÒÄÏ ÇÔ¼ö ¿À·ù Ãâ·Â
-void DisplayError(const char* msg);
-// ¼ÒÄÏ Åë½Å ½º·¹µå ÇÔ¼ö
-DWORD WINAPI ClientMain(LPVOID arg);
 
-SOCKET sock; // ¼ÒÄÏ
-char buf[BUFSIZE + 1]; // µ¥ÀÌÅÍ ¼Û¼ö½Å ¹öÆÛ
-HANDLE hReadEvent, hWriteEvent; // ÀÌº¥Æ®
-HWND hSendButton; // º¸³»±â ¹öÆ°
-HWND hEdit1, hEdit2; // ¿¡µğÆ® ÄÁÆ®·Ñ
+HWND hNickNameEdit, hChatHistoryEdit, hMessageEdit, hSendButton;
+SOCKET clientSocket;
+WSADATA wsaData;
+HANDLE hReadEvent, hWriteEvent; // ì´ë²¤íŠ¸
+char buf[MAX_BUFFER_SIZE + 1]; // ë°ì´í„° ì†¡ìˆ˜ì‹  ë²„í¼
 
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
-	LPSTR lpCmdLine, int nCmdShow)
-{
-	// À©¼Ó ÃÊ±âÈ­
-	WSADATA wsa;
-	if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
-		return 1;
+char ip_addr[256] = "";
+int port_number = 9000;
+char nickname[50] = "";
 
-	// ÀÌº¥Æ® »ı¼º
-	hReadEvent = CreateEvent(NULL, FALSE, TRUE, NULL);
-	hWriteEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
-
-	// ¼ÒÄÏ Åë½Å ½º·¹µå »ı¼º
-	CreateThread(NULL, 0, ClientMain, NULL, 0, NULL);
-
-	// ´ëÈ­»óÀÚ »ı¼º
-	DialogBox(hInstance, MAKEINTRESOURCE(IDD_CHAT_DIALOG), NULL, DlgProc);
-
-	// ÀÌº¥Æ® Á¦°Å
-	CloseHandle(hReadEvent);
-	CloseHandle(hWriteEvent);
-
-	// À©¼Ó Á¾·á
-	WSACleanup();
-	return 0;
-}
-
-// ´ëÈ­»óÀÚ ÇÁ·Î½ÃÀú
-INT_PTR CALLBACK DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
-{
-	switch (uMsg) {
-	case WM_INITDIALOG:
-		hEdit1 = GetDlgItem(hDlg, IDC_MESSAGE_EDIT);
-		hEdit2 = GetDlgItem(hDlg, IDC_CHAT_HISTORY_EDIT);
-		hSendButton = GetDlgItem(hDlg, IDOK);
-		SendMessage(hEdit1, EM_SETLIMITTEXT, BUFSIZE, 0);
-		return TRUE;
-	case WM_COMMAND:
-		switch (LOWORD(wParam)) {
-		case IDC_SEND_BUTTON:
-			EnableWindow(hSendButton, FALSE); // º¸³»±â ¹öÆ° ºñÈ°¼ºÈ­
-			WaitForSingleObject(hReadEvent, INFINITE); // ÀĞ±â ¿Ï·á ´ë±â
-			GetDlgItemTextA(hDlg, IDC_MESSAGE_EDIT, buf, BUFSIZE + 1);
-			SetEvent(hWriteEvent); // ¾²±â ¿Ï·á ¾Ë¸²
-			SetFocus(hEdit1); // Å°º¸µå Æ÷Ä¿½º ÀüÈ¯
-			SendMessage(hEdit1, EM_SETSEL, 0, -1); // ÅØ½ºÆ® ÀüÃ¼ ¼±ÅÃ
-			return TRUE;
-		case IDC_EXIT_BUTTON:
-			EndDialog(hDlg, IDC_EXIT_BUTTON); // ´ëÈ­»óÀÚ ´İ±â
-			closesocket(sock); // ¼ÒÄÏ ´İ±â
-			return TRUE;
-		}
-		return FALSE;
-	}
-	return FALSE;
-}
-
-// ¿¡µğÆ® ÄÁÆ®·Ñ Ãâ·Â ÇÔ¼ö
 void DisplayText(const char* fmt, ...)
 {
 	va_list arg;
 	va_start(arg, fmt);
-	char cbuf[BUFSIZE * 2];
+	char cbuf[MAX_BUFFER_SIZE * 2];
 	vsprintf(cbuf, fmt, arg);
 	va_end(arg);
 
-	int nLength = GetWindowTextLength(hEdit2);
-	SendMessage(hEdit2, EM_SETSEL, nLength, nLength);
-	SendMessageA(hEdit2, EM_REPLACESEL, FALSE, (LPARAM)cbuf);
-}
-
-// ¼ÒÄÏ ÇÔ¼ö ¿À·ù Ãâ·Â
-void DisplayError(const char* msg)
-{
-	LPVOID lpMsgBuf;
-	FormatMessageA(
-		FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
-		NULL, WSAGetLastError(),
-		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-		(char*)&lpMsgBuf, 0, NULL);
-	DisplayText("[%s] %s\r\n", msg, (char*)lpMsgBuf);
-	LocalFree(lpMsgBuf);
-}
-
-// TCP Å¬¶óÀÌ¾ğÆ® ½ÃÀÛ ºÎºĞ
-DWORD WINAPI ClientMain(LPVOID arg)
-{
-	int retval;
-
-	// ¼ÒÄÏ »ı¼º
-	sock = socket(AF_INET, SOCK_STREAM, 0);
-	if (sock == INVALID_SOCKET) err_quit("socket()");
-
-	// connect()
-	struct sockaddr_in serveraddr;
-	memset(&serveraddr, 0, sizeof(serveraddr));
-	serveraddr.sin_family = AF_INET;
-	serveraddr.sin_addr.s_addr = inet_addr(SERVERIP);
-	serveraddr.sin_port = htons(SERVERPORT);
-	retval = connect(sock, (struct sockaddr*)&serveraddr, sizeof(serveraddr));
-	if (retval == SOCKET_ERROR) err_quit("connect()");
-
-	// ¼­¹ö¿Í µ¥ÀÌÅÍ Åë½Å
-	while (1) {
-		WaitForSingleObject(hWriteEvent, INFINITE); // ¾²±â ¿Ï·á ´ë±â
-
-		// ¹®ÀÚ¿­ ±æÀÌ°¡ 0ÀÌ¸é º¸³»Áö ¾ÊÀ½
-		if (strlen(buf) == 0) {
-			EnableWindow(hSendButton, TRUE); // º¸³»±â ¹öÆ° È°¼ºÈ­
-			SetEvent(hReadEvent); // ÀĞ±â ¿Ï·á ¾Ë¸²
-			continue;
-		}
-
-		// µ¥ÀÌÅÍ º¸³»±â
-		retval = send(sock, buf, (int)strlen(buf), 0);
-		if (retval == SOCKET_ERROR) {
-			DisplayError("send()");
-			break;
-		}
-		DisplayText("[TCP Å¬¶óÀÌ¾ğÆ®] %d¹ÙÀÌÆ®¸¦ º¸³Â½À´Ï´Ù.\r\n", retval);
-
-		// µ¥ÀÌÅÍ ¹Ş±â
-		retval = recv(sock, buf, retval, MSG_WAITALL);
-		if (retval == SOCKET_ERROR) {
-			DisplayError("recv()");
-			break;
-		}
-		else if (retval == 0)
-			break;
-
-		// ¹ŞÀº µ¥ÀÌÅÍ Ãâ·Â
-		buf[retval] = '\0';
-		DisplayText("[TCP Å¬¶óÀÌ¾ğÆ®] %d¹ÙÀÌÆ®¸¦ ¹Ş¾Ò½À´Ï´Ù.\r\n", retval);
-		DisplayText("[¹ŞÀº µ¥ÀÌÅÍ] %s\r\n", buf);
-
-		EnableWindow(hSendButton, TRUE); // º¸³»±â ¹öÆ° È°¼ºÈ­
-		SetEvent(hReadEvent); // ÀĞ±â ¿Ï·á ¾Ë¸²
-	}
-
-	return 0;
-}
-
-
-/*#include <winsock2.h>
-#include <windows.h>
-#include <cstdio>    // Ãß°¡: sprintf_s¸¦ »ç¿ëÇÏ±â À§ÇÑ Çì´õ ÆÄÀÏ
-#include <ws2tcpip.h> // Ãß°¡: InetPtonÀ» »ç¿ëÇÏ±â À§ÇÑ Çì´õ ÆÄÀÏ
-#include "resource.h"
-
-#define MAX_BUFFER_SIZE 1024
-#define SERVER_PORT 12345
-
-HWND hNickNameEdit, hChatHistoryEdit, hMessageEdit;
-SOCKET clientSocket;
-WSADATA wsaData;
-
-void AddMessageToChatHistory(const char* message) {
-    SendMessage(hChatHistoryEdit, EM_SETSEL, -1, -1);
-    SendMessage(hChatHistoryEdit, EM_REPLACESEL, 0, (LPARAM)message);
-    SendMessage(hChatHistoryEdit, EM_SCROLLCARET, 0, 0);
+	int nLength = GetWindowTextLength(hChatHistoryEdit);
+	SendMessage(hChatHistoryEdit, EM_SETSEL, nLength, nLength);
+	SendMessageA(hChatHistoryEdit, EM_REPLACESEL, FALSE, (LPARAM)cbuf);
 }
 
 LRESULT CALLBACK DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam) {
@@ -188,27 +47,13 @@ LRESULT CALLBACK DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPara
         hNickNameEdit = GetDlgItem(hwndDlg, IDC_NICKNAME_EDIT);
         hChatHistoryEdit = GetDlgItem(hwndDlg, IDC_CHAT_HISTORY_EDIT);
         hMessageEdit = GetDlgItem(hwndDlg, IDC_MESSAGE_EDIT);
-
-        // À©¼Ó ÃÊ±âÈ­
-        if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-            MessageBox(hwndDlg, L"Failed to initialize Winsock.", L"Error", MB_OK | MB_ICONERROR);
-            EndDialog(hwndDlg, 0);
-        }
-
-        // Å¬¶óÀÌ¾ğÆ® ¼ÒÄÏ »ı¼º
-        clientSocket = socket(AF_INET, SOCK_STREAM, 0);
-        if (clientSocket == INVALID_SOCKET) {
-            MessageBox(hwndDlg, L"Failed to create client socket.", L"Error", MB_OK | MB_ICONERROR);
-            WSACleanup();
-            EndDialog(hwndDlg, 0);
-        }
-
+		hSendButton = GetDlgItem(hwndDlg, IDC_SEND_BUTTON);
         return TRUE;
 
     case WM_COMMAND:
         switch (LOWORD(wParam)) {
         case IDC_CONNECT_BUTTON:
-            // ¿¬°á ¹öÆ° µ¿ÀÛ Ãß°¡
+            // ì—°ê²° ë²„íŠ¼ ë™ì‘ ì¶”ê°€
         {
             SOCKADDR_IN serverAddr;
             serverAddr.sin_family = AF_INET;
@@ -227,11 +72,11 @@ LRESULT CALLBACK DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPara
         break;
 
         case IDC_SETNICK_BUTTON:
-            // ´Ğ³×ÀÓ ¼³Á¤ ¹öÆ° µ¿ÀÛ Ãß°¡
+            // ë‹‰ë„¤ì„ ì„¤ì • ë²„íŠ¼ ë™ì‘ ì¶”ê°€
         {
             wchar_t nickName[256];
             GetWindowText(hNickNameEdit, nickName, sizeof(nickName) / sizeof(nickName[0]));
-
+			nickname = 
             char buffer[MAX_BUFFER_SIZE];
             sprintf_s(buffer, sizeof(buffer), "[%ls] joined the chat.\r\n", nickName);
 
@@ -240,23 +85,22 @@ LRESULT CALLBACK DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPara
         break;
 
         case IDC_SEND_BUTTON:
-            // ¸Ş½ÃÁö Àü¼Û ¹öÆ° µ¿ÀÛ Ãß°¡
+            // ë©”ì‹œì§€ ì „ì†¡ ë²„íŠ¼ ë™ì‘ ì¶”ê°€
         {
-            wchar_t message[256];
-            GetWindowText(hMessageEdit, message, sizeof(message) / sizeof(message[0]));
 
-            wchar_t nickName[256];
-            GetWindowText(hNickNameEdit, nickName, sizeof(nickName) / sizeof(nickName[0]));
-
-            char buffer[MAX_BUFFER_SIZE];
-            sprintf_s(buffer, sizeof(buffer), "[%ls] %ls\r\n", nickName, message);
-
-            send(clientSocket, buffer, strlen(buffer), 0);
+			EnableWindow(hSendButton, FALSE); // ë³´ë‚´ê¸° ë²„íŠ¼ ë¹„í™œì„±í™”
+			WaitForSingleObject(hReadEvent, INFINITE); // ì½ê¸° ì™„ë£Œ ëŒ€ê¸°
+			GetDlgItemTextA(hwndDlg, IDC_MESSAGE_EDIT, buf, MAX_BUFFER_SIZE + 1);
+			SetEvent(hWriteEvent); // ì“°ê¸° ì™„ë£Œ ì•Œë¦¼
+			SetFocus(hMessageEdit); // í‚¤ë³´ë“œ í¬ì»¤ìŠ¤ ì „í™˜
+			SendMessage(hMessageEdit, EM_SETSEL, 0, -1); // í…ìŠ¤íŠ¸ ì „ì²´ ì„ íƒ
+			SetWindowText(hMessageEdit, L"");
+			return TRUE;
         }
         break;
 
         case IDC_EXIT_BUTTON:
-            // Å¬¶óÀÌ¾ğÆ® Á¾·á ¹öÆ° µ¿ÀÛ Ãß°¡
+            // í´ë¼ì´ì–¸íŠ¸ ì¢…ë£Œ ë²„íŠ¼ ë™ì‘ ì¶”ê°€
             closesocket(clientSocket);
             WSACleanup();
             EndDialog(hwndDlg, 0);
@@ -265,18 +109,96 @@ LRESULT CALLBACK DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPara
         return TRUE;
 
     case WM_CLOSE:
-        // Å¬¶óÀÌ¾ğÆ® Á¾·á Ã³¸® Ãß°¡
+        // í´ë¼ì´ì–¸íŠ¸ ì¢…ë£Œ ì²˜ë¦¬ ì¶”ê°€
         closesocket(clientSocket);
         WSACleanup();
         EndDialog(hwndDlg, 0);
         break;
 
-        // Ãß°¡ÀûÀÎ ÀÌº¥Æ® Ã³¸®
+        // ì¶”ê°€ì ì¸ ì´ë²¤íŠ¸ ì²˜ë¦¬
 
     default:
         return FALSE;
     }
     return TRUE;
+}
+
+int client_init(char* ip, int port)
+{
+	
+	SOCKET server_socket;
+	WSADATA wsadata;
+	SOCKADDR_IN server_address = { 0 };
+
+	if (WSAStartup(MAKEWORD(2, 2), &wsadata) != 0)
+	{
+		MessageBox(NULL, L"WSAStartup ì—ëŸ¬.", L"ì˜¤ë¥˜", MB_ICONERROR);
+		return -1;
+	}
+
+	if ((server_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
+	{
+		MessageBox(NULL, L"socket ì—ëŸ¬.", L"ì˜¤ë¥˜", MB_ICONERROR);
+		return -1;
+	}
+
+	memset(&server_address, 0, sizeof(server_address));
+	server_address.sin_family = AF_INET;
+	server_address.sin_addr.s_addr = inet_addr(ip);
+	server_address.sin_port = htons(port);
+
+	if ((connect(server_socket, (struct sockaddr*)&server_address, sizeof(server_address))) < 0)
+	{
+		MessageBox(NULL, L"connect ì—ëŸ¬", L"ì˜¤ë¥˜", MB_ICONERROR);
+		return -1;
+	}
+
+	return server_socket;
+}
+
+DWORD WINAPI chat_service(void* params)
+{
+	char recv_message[MAXBYTE];
+	int len = 0;
+	int index = 0;
+	WSANETWORKEVENTS ev;
+	int retval;
+	
+	SOCKET s = client_init(ip_addr, port_number);
+
+	while (1)
+	{
+		
+		WaitForSingleObject(hWriteEvent, INFINITE); // ì“°ê¸° ì™„ë£Œ ëŒ€ê¸°
+
+		// ë¬¸ìì—´ ê¸¸ì´ê°€ 0ì´ë©´ ë³´ë‚´ì§€ ì•ŠìŒ
+		if (strlen(buf) == 0) {
+			EnableWindow(hSendButton, TRUE); // ë³´ë‚´ê¸° ë²„íŠ¼ í™œì„±í™”
+			SetEvent(hReadEvent); // ì½ê¸° ì™„ë£Œ ì•Œë¦¼
+			continue;
+		}
+
+		// ë°ì´í„° ë³´ë‚´ê¸°
+		retval = send(s, buf, (int)strlen(buf), 0);
+		DisplayText("[TCP í´ë¼ì´ì–¸íŠ¸] %dë°”ì´íŠ¸ë¥¼ ë³´ëƒˆìŠµë‹ˆë‹¤.\r\n", retval);
+
+		// ë°ì´í„° ë°›ê¸°
+		retval = recv(s, buf, retval, MSG_WAITALL);
+		if (retval == 0)
+			break;
+
+		// ë°›ì€ ë°ì´í„° ì¶œë ¥
+		buf[retval] = '\0';
+		DisplayText("[TCP í´ë¼ì´ì–¸íŠ¸] %dë°”ì´íŠ¸ë¥¼ ë°›ì•˜ìŠµë‹ˆë‹¤.\r\n", retval);
+		DisplayText("[ë°›ì€ ë°ì´í„°] %s\r\n", buf);
+
+		EnableWindow(hSendButton, TRUE); // ë³´ë‚´ê¸° ë²„íŠ¼ í™œì„±í™”
+		SetEvent(hReadEvent); // ì½ê¸° ì™„ë£Œ ì•Œë¦¼
+	}
+	WSACleanup();
+	_endthreadex(0);
+
+	return 0;
 }
 
 int CALLBACK WinMain(
@@ -285,9 +207,34 @@ int CALLBACK WinMain(
     _In_ LPSTR lpCmdLine,
     _In_ int nCmdShow
 ) {
-    // ´ëÈ­»óÀÚ »ı¼º
-    DialogBox(hInstance, MAKEINTRESOURCE(IDD_CHAT_DIALOG), NULL, DialogProc);
+	HANDLE mainthread;
+	// ìœˆì† ì´ˆê¸°í™”
+	WSADATA wsa;
+	if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
+		return 1;
 
-    return 0;
+	
+	// ì´ë²¤íŠ¸ ìƒì„±
+	hReadEvent = CreateEvent(NULL, FALSE, TRUE, NULL);
+	hWriteEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
+
+    strcpy_s(ip_addr, SERVER_IP);//ì„œë²„Â ì£¼ì†Œ
+    port_number = SERVER_PORT;//í¬íŠ¸Â ë²ˆí˜¸
+    strcpy_s(nickname, "1");//ë³„ëª…
+
+	
+	
+	// ì†Œì¼“ í†µì‹  ìŠ¤ë ˆë“œ ìƒì„±
+	CreateThread(NULL, 0, chat_service, NULL, 0, NULL);
+
+	// ëŒ€í™”ìƒì ìƒì„±
+	DialogBox(hInstance, MAKEINTRESOURCE(IDD_CHAT_DIALOG), NULL, DialogProc);
+
+	// ì´ë²¤íŠ¸ ì œê±°
+	CloseHandle(hReadEvent);
+	CloseHandle(hWriteEvent);
+
+	// ìœˆì† ì¢…ë£Œ
+	WSACleanup();
+	return 0;
 }
-*/
