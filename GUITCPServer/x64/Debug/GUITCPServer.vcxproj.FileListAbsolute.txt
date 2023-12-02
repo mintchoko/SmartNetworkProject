@@ -1,2 +1,0 @@
-C:\Users\heyon\OneDrive\바탕 화면\TCP-IP-Socket-Prog-Book-2nd-Source\Windows\Chapter10\GUITCPServer\x64\Debug\GUITCPServer.exe
-D:\SmartNetworkProject\GUITCPServer\x64\Debug\GUITCPServer.exe
