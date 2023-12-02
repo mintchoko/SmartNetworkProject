@@ -30,6 +30,8 @@ IDC_EXIT_BUTTON <- 끝내기 버튼
 서버의 경우 같은 기능이면 같은 이름을 사용합니다.
 
 서버는 server_test4 폴더에 있는 파일 이용
+
 클라이언트는 client_test4 폴더의 경우 GUI는 나오고 연결도 되지만 recv()가 되지 않아 정보를 받지 못함
+
 SNSproClient 폴더의 경우 연결이 되지만(cmd창에서 SNSproClient.exe 127.0.0.1 9000 별명 <- 이렇게 입력해야 실행됨) GUI 없음
 
